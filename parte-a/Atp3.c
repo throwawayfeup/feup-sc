@@ -14,7 +14,7 @@
 #endif
 
 //The number of jobs to process
-#define JOBS_NO 8 
+#define JOBS_NO 8
 
 //The number of concurrent workers
 #define SIMULTANEOUS_WORKERS_MAX 2
@@ -39,7 +39,30 @@ void dispatch_jobs_v0(JOB_Handler jobs[], int number_of_jobs)
 
 void dispatch_jobs_v1(JOB_Handler jobs[], int number_of_jobs)
 {	
-	//Process all jobs - One process (worker) per job
+	for (int i = 0; i < number_of_jobs; i++) {
+		int childId;
+		if ((childId = fork()) == 0) {
+			int numPrimes = prime_count(jobs[i].input_value);
+			exit(numPrimes); // resolve o wait
+		} else {
+			JOB_processing_status_update(jobs + i, childId);
+			DEBUG_PRINTF("Working job: %d (%lu) -> id %d\n", i+1, jobs[i].input_value, childId);
+		}
+	}
+
+	DEBUG_PRINTF("All jobs processed!\n");
+
+	int childAuxId;
+	int returnValue;
+	while ( (childAuxId = wait(&returnValue)) > 0) {
+		DEBUG_PRINTF("O child %d retornou %d \n", childAuxId, returnValue);
+		for (int j = 0; j<number_of_jobs; j++) { 
+			if (jobs[j].worker_pid == childAuxId) {
+				JOB_update_result_and_processing_status_clear(jobs + j, returnValue);
+				break;
+			}
+		}
+	}
 
 }
 
@@ -47,6 +70,53 @@ void dispatch_jobs_v2(JOB_Handler jobs[], int number_of_jobs)
 {
 	//Process all jobs - One process (worker) per job, with
 	//a limit on the number of simultaneous workers (SIMULTANEOUS_WORKERS_MAX)
+	int numBusyWorkers = 0;
+
+	int childId;
+	int completedChildId;
+	int completedChildResult;
+
+	// percorrendo jobs array
+	for (int jobIdx = 0; jobIdx < number_of_jobs; jobIdx++) {
+
+		// Criar subprocessos
+		if ((childId = fork()) == 0) {
+			int numPrimes = prime_count(jobs[jobIdx].input_value);
+			exit(numPrimes); // resolve o wait
+		} else {
+			numBusyWorkers++;
+			JOB_processing_status_update(jobs + jobIdx, childId);
+			DEBUG_PRINTF("Working job: %d (%lu) -> id %d\n", jobIdx+1, jobs[jobIdx].input_value, childId);
+		}
+
+		// Espero um deles acabar
+		if (numBusyWorkers == SIMULTANEOUS_WORKERS_MAX) {
+			// Esperar que um deles acabe
+			if ( (completedChildId = wait(&completedChildResult)) > 0 ) {
+				numBusyWorkers--;
+				DEBUG_PRINTF("O child %d retornou %d \n", completedChildId, completedChildResult);
+				for (int j = 0; j<number_of_jobs; j++) {
+					if (jobs[j].worker_pid == completedChildId) {
+						JOB_update_result_and_processing_status_clear(jobs + j, completedChildResult);
+						break;
+					}
+				}
+			}
+		}
+
+	}
+
+	// Esperar o ultimo processo acabar
+	while ( (completedChildId = wait(&completedChildResult)) > 0 ){
+		DEBUG_PRINTF("O child %d retornou %d \n", completedChildId, completedChildResult);
+		numBusyWorkers--;
+		for (int j = 0; j<number_of_jobs; j++) {
+			if (jobs[j].worker_pid == completedChildId) {
+				JOB_update_result_and_processing_status_clear(jobs + j, completedChildResult);
+				break;
+			}
+		}
+	}
 
 }
 
@@ -69,9 +139,9 @@ int main(int argc, char const *argv[])
 		JOB_init(local_var_job_array + i, (1+(rand() % 10))*100000 );  //[1..10]*100000
 	
 	//Process all jobs - blocking function
-	dispatch_jobs_v0(local_var_job_array, JOBS_NO);
-	//dispatch_jobs_v1(local_var_job_array, JOBS_NO);
-	//dispatch_jobs_v2(local_var_job_array, JOBS_NO);
+	// dispatch_jobs_v0(local_var_job_array, JOBS_NO);
+	// dispatch_jobs_v1(local_var_job_array, JOBS_NO);
+	dispatch_jobs_v2(local_var_job_array, JOBS_NO);
 
 	//Print the results
 	for (int i=0; i<JOBS_NO; i++){

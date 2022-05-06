@@ -2,8 +2,8 @@
 #include <unistd.h>
 #include <time.h>
 
-#define HOW_MANY_FORKS 2 //Number of forks. Testing from 1 to 4 should be enough
-//#define ENABLE_HEAVY_LOAD
+#define HOW_MANY_FORKS 4 //Number of forks. Testing from 1 to 4 should be enough
+#define ENABLE_HEAVY_LOAD
 
 unsigned long _timestamp_sec(clockid_t clk_id){
     struct timespec tp;
@@ -12,16 +12,16 @@ unsigned long _timestamp_sec(clockid_t clk_id){
 }
 
 void heavy_load() {
-    unsigned long i = 10000000000L;
-    while (i--);
+    printf("\nCOMECEI\n");
+    sleep(5);
+    printf("\nCABEI\n");
 }
 
 int main() {
   
     printf("Starting with process id: %d\n", getpid());
 
-    for (int i=0; i<HOW_MANY_FORKS; i++) 
-        fork();
+    for (int i=0; i<HOW_MANY_FORKS; i++) fork();
   
     printf("Running process id: %d\n", getpid());
 
